@@ -5,20 +5,23 @@ from email.mime.text import MIMEText
 import sys
 import os
 import time
+import traceback
+from datetime import datetime
 
-# =========================================================
-# ★ 金庫（Secrets）から鍵を取り出す
-# =========================================================
-CI_ID = os.getenv("CI_ID")
-CI_PASS = os.getenv("CI_PASS")
-GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
-GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
+# ==========================================
+# 1. 秘密情報の設定（GitHub Secretsから取得）
+# ==========================================
+CI_LOGIN_ID = os.getenv("CI_ID")
+CI_PASSWORD = os.getenv("CI_PASS")
+SENDER_EMAIL = os.getenv("GMAIL_ADDRESS")
+SENDER_PASSWORD = os.getenv("GMAIL_APP_PASS")
 RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 
-# =========================================================
-# ★ 監視リスト（ここに監視したいURLをすべて入れます）
-# =========================================================
-TARGET_LIST = [
+if not all([CI_LOGIN_ID, CI_PASSWORD, SENDER_EMAIL, SENDER_PASSWORD, RECEIVER_EMAIL]):
+    print("エラー: GitHub Secretsの設定が足りません！設定を確認してください。")
+    sys.exit(1)
+
+TARGET_URLS = [
     "https://www.ci-medical.com/dental/catalog_item/801Y202",
     "https://www.ci-medical.com/dental/catalog_item/801Y201",
     "https://www.ci-medical.com/dental/catalog_item/801Y191",
@@ -27,83 +30,108 @@ TARGET_LIST = [
     "https://www.ci-medical.com/dental/catalog_item/801Y458"
 ]
 
+login_url = "https://www.ci-medical.com/accounts/sign_in"
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept-Language": "ja-JP,ja;q=0.9",
+    "Referer": "https://www.ci-medical.com/"
+}
+
 def main():
     session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    })
-
-    print("ログイン処理を開始します...")
+    session.headers.update(headers)
+    
+    # --- 1. ログイン処理 ---
+    print("ログイン中...")
     try:
-        # Ciメディカルのログインページ
-        login_url = "https://www.ci-medical.com/login" 
-        res = session.get(login_url, timeout=10)
+        res = session.get(login_url, timeout=15)
+        res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
 
-        # ページ内の隠し鍵（tokenなど）をすべて自動回収
         login_data = {}
-        for input_tag in soup.find_all("input"):
-            if input_tag.has_attr("name"):
-                login_data[input_tag["name"]] = input_tag.get("value", "")
+        for hidden_input in soup.find_all("input", type="hidden"):
+            if hidden_input.has_attr("name") and hidden_input.has_attr("value"):
+                login_data[hidden_input["name"]] = hidden_input["value"]
 
-        # 金庫から取り出したIDとパスワードをセット
-        login_data["login_id"] = CI_ID      
-        login_data["password"] = CI_PASS
+        login_data["account[login]"] = CI_LOGIN_ID
+        login_data["account[password]"] = CI_PASSWORD
 
-        # ログイン実行
-        session.post(login_url, data=login_data, timeout=10)
-        print("ログイン通信完了")
-        time.sleep(2)
+        login_res = session.post(login_url, data=login_data, timeout=15)
+        login_res.raise_for_status()
+
+        if "ログインできませんでした" in login_res.text or "パスワードが間違っています" in login_res.text:
+            raise Exception("ログイン情報が間違っているか、ログインに失敗しました。")
+        
+        print("ログイン処理完了！")
 
     except Exception as e:
-        print(f"ログイン処理でエラー: {e}")
+        print("ログイン処理で致命的なエラーが発生しました:")
+        print(traceback.format_exc())
         sys.exit(1)
 
-    found_items = [] # 復活した商品を貯めておくリスト
+    # --- 2. 在庫チェック処理 ---
+    print("在庫をチェックしています...")
+    available_items = []
 
-    print("在庫チェックを開始します...")
-    
-    # 監視リストを順番にチェックしていく
-    for url in TARGET_LIST:
-        print(f"チェック中: {url}")
-        try:
-            r = session.get(url, timeout=10)
-            r.encoding = r.apparent_encoding
-
-            # ★作戦：「買い物カゴに入れる」ボタンが出現したかを探す！
-            if "買い物カゴに入れる" in r.text:
-                if "Ci" in r.text: # 別ページに飛ばされていないかの安全チェック
-                    print(" 〇 変化あり（在庫復活の可能性！）")
-                    found_items.append(f"・{url}")
-                else:
-                    print(" × ログイン失敗か別ページに飛ばされています")
-            else:
-                print(" × 在庫なし、またはログイン画面に弾かれています")
-        except Exception as e:
-            print(f" 取得失敗: {e}")
+    for url in TARGET_URLS:
+        success = False
         
-        time.sleep(2) # 連続アクセスで目をつけられないように2秒休憩
+        for i in range(3):
+            try:
+                time.sleep(2)
+                target_res = session.get(url, timeout=15)
+                target_res.raise_for_status()
+                target_soup = BeautifulSoup(target_res.content, 'html.parser')
+                page_text = target_soup.get_text()
 
-    # 1つでも復活した商品があればメールを飛ばす
-    if found_items:
-        send_email(found_items)
+                if "在庫なし" not in page_text:
+                    print(f"〇 変化あり（在庫復活の可能性！）: {url}")
+                    available_items.append(url)
+                else:
+                    print(f"× 在庫なし: {url}")
+                
+                success = True
+                break
+
+            except Exception as e:
+                print(f"{i+1}回目の取得失敗 ({url}): {e}")
+                time.sleep(3)
+        if not success:
+            print(f"完全に取得失敗: {url}（スキップします）")
+
+    # --- 3. メール送信処理 ---
+    if available_items:
+        print("在庫が復活した商品があったので、メールを送信します！")
+        send_email(available_items)
     else:
-        print("復活している商品はありませんでした。")
+        print("現在、すべての商品は「在庫なし」でした。")
 
 def send_email(items):
-    msg = MIMEText("Ciメディカルで以下の商品の在庫が復活した可能性があります！\n\n" + "\n".join(items))
-    msg['Subject'] = "【在庫通知】Ciメディカルの商品が入荷しました！"
-    msg['From'] = GMAIL_ADDRESS
+    current_time = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
+    subject = f"【在庫通知】Ciメディカルの商品が入荷しました！ {current_time}"
+    
+    body = "以下の商品の在庫が復活した可能性があります。\n\n"
+    for item in items:
+        body += f"・{item}\n"
+    
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = SENDER_EMAIL
     msg['To'] = RECEIVER_EMAIL
+
     try:
         server = smtplib.SMTP('smtp.gmail.com', 587, timeout=10)
         server.starttls()
-        server.login(GMAIL_ADDRESS, GMAIL_APP_PASS)
+        server.login(SENDER_EMAIL, SENDER_PASSWORD)
         server.send_message(msg)
         server.quit()
-        print("メール送信成功")
+        print("通知メールの送信が完了しました！")
     except Exception as e:
-        print("メール送信失敗")
+        print("メールの送信に失敗しました:")
+        print(traceback.format_exc())
+        print("※GitHub Secretsの「GMAIL_APP_PASS」が正しく設定されているか確認してください。")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
