@@ -1,0 +1,31 @@
+name: Ci Medical Stock Check
+
+on:
+  repository_dispatch: # GASからの遠隔スイッチを受信する設定
+  workflow_dispatch:   # GitHubの画面から手動でテストする用のボタン
+
+jobs:
+  run-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Requests & BeautifulSoup
+        run: pip install requests beautifulsoup4
+
+      - name: Run Python Script
+        env:
+          # ここで金庫（Secrets）の中身を読み込んで、Pythonに渡しています
+          CI_ID: ${{ secrets.CI_ID }}
+          CI_PASS: ${{ secrets.CI_PASS }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASS: ${{ secrets.GMAIL_APP_PASS }}
+          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
+        run: python ci_check.py
