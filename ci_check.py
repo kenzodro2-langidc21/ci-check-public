@@ -7,7 +7,7 @@ import os
 import time
 
 # =========================================================
-# ★ 金庫（Secrets）から鍵を取り出す（これが超安全なおまじないです！）
+# ★ 金庫（Secrets）から鍵を取り出す
 # =========================================================
 CI_ID = os.getenv("CI_ID")
 CI_PASS = os.getenv("CI_PASS")
@@ -15,8 +15,17 @@ GMAIL_ADDRESS = os.getenv("GMAIL_ADDRESS")
 GMAIL_APP_PASS = os.getenv("GMAIL_APP_PASS")
 RECEIVER_EMAIL = os.getenv("RECEIVER_EMAIL")
 
-# 監視したいCiメディカルの商品URL
-TARGET_URL = "https://www.ci-medical.com/dental/catalog_item/801Y173"
+# =========================================================
+# ★ 監視リスト（ここに監視したいURLをすべて入れます）
+# =========================================================
+TARGET_LIST = [
+    "https://www.ci-medical.com/dental/catalog_item/801Y202",
+    "https://www.ci-medical.com/dental/catalog_item/801Y201",
+    "https://www.ci-medical.com/dental/catalog_item/801Y191",
+    "https://www.ci-medical.com/dental/catalog_item/801Y10156",
+    "https://www.ci-medical.com/dental/catalog_item/801Y173",
+    "https://www.ci-medical.com/dental/catalog_item/801Y458"
+]
 
 def main():
     session = requests.Session()
@@ -38,7 +47,7 @@ def main():
                 login_data[input_tag["name"]] = input_tag.get("value", "")
 
         # 金庫から取り出したIDとパスワードをセット
-        login_data["login_id"] = CI_ID      # ※もし以前のコードでここが "email" 等だった場合は書き換えてください
+        login_data["login_id"] = CI_ID      
         login_data["password"] = CI_PASS
 
         # ログイン実行
@@ -50,26 +59,39 @@ def main():
         print(f"ログイン処理でエラー: {e}")
         sys.exit(1)
 
-    print("在庫チェック中...")
-    try:
-        r = session.get(TARGET_URL, timeout=10)
-        r.encoding = r.apparent_encoding
+    found_items = [] # 復活した商品を貯めておくリスト
 
-# ★作戦変更：「在庫なし」が消えたかではなく、「買い物カゴに入れる」ボタンが出現したかを探す！
-        if "買い物カゴに入れる" in r.text:
-            if "Ci" in r.text: # 別ページに飛ばされていないかの安全チェック
-                print(f"〇 変化あり（在庫復活の可能性！）: {TARGET_URL}")
-                send_email([TARGET_URL])
+    print("在庫チェックを開始します...")
+    
+    # 監視リストを順番にチェックしていく
+    for url in TARGET_LIST:
+        print(f"チェック中: {url}")
+        try:
+            r = session.get(url, timeout=10)
+            r.encoding = r.apparent_encoding
+
+            # ★作戦：「買い物カゴに入れる」ボタンが出現したかを探す！
+            if "買い物カゴに入れる" in r.text:
+                if "Ci" in r.text: # 別ページに飛ばされていないかの安全チェック
+                    print(" 〇 変化あり（在庫復活の可能性！）")
+                    found_items.append(f"・{url}")
+                else:
+                    print(" × ログイン失敗か別ページに飛ばされています")
             else:
-                print("× ログイン失敗か別ページに飛ばされています")
-        else:
-            print(f"× 在庫なし、またはログイン画面に弾かれています: {TARGET_URL}")
+                print(" × 在庫なし、またはログイン画面に弾かれています")
+        except Exception as e:
+            print(f" 取得失敗: {e}")
+        
+        time.sleep(2) # 連続アクセスで目をつけられないように2秒休憩
 
-    except Exception as e:
-        print(f"取得失敗: {e}")
+    # 1つでも復活した商品があればメールを飛ばす
+    if found_items:
+        send_email(found_items)
+    else:
+        print("復活している商品はありませんでした。")
 
 def send_email(items):
-    msg = MIMEText("Ciメディカルで以下の在庫が復活した可能性があります！\n\n" + "\n".join(items))
+    msg = MIMEText("Ciメディカルで以下の商品の在庫が復活した可能性があります！\n\n" + "\n".join(items))
     msg['Subject'] = "【在庫通知】Ciメディカルの商品が入荷しました！"
     msg['From'] = GMAIL_ADDRESS
     msg['To'] = RECEIVER_EMAIL
