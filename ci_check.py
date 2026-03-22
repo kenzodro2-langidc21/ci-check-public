@@ -56,7 +56,7 @@ def main():
         r.encoding = r.apparent_encoding
 
         # ※「入荷待ち」など、在庫がない時に画面に出る言葉を指定してください
-        if "入荷待ち" not in r.text: 
+        if "在庫なし" not in r.text: 
             if "Ci" in r.text: # 別ページに飛ばされていないかの安全チェック
                 print(f"〇 変化あり（在庫復活の可能性！）: {TARGET_URL}")
                 send_email([TARGET_URL])
