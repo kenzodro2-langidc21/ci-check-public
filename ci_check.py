@@ -55,15 +55,15 @@ def main():
         r = session.get(TARGET_URL, timeout=10)
         r.encoding = r.apparent_encoding
 
-        # ※「入荷待ち」など、在庫がない時に画面に出る言葉を指定してください
-        if "在庫なし" not in r.text: 
+# ★作戦変更：「在庫なし」が消えたかではなく、「買い物カゴに入れる」ボタンが出現したかを探す！
+        if "買い物カゴに入れる" in r.text:
             if "Ci" in r.text: # 別ページに飛ばされていないかの安全チェック
                 print(f"〇 変化あり（在庫復活の可能性！）: {TARGET_URL}")
                 send_email([TARGET_URL])
             else:
                 print("× ログイン失敗か別ページに飛ばされています")
         else:
-            print(f"× 在庫なし（文言確認）: {TARGET_URL}")
+            print(f"× 在庫なし、またはログイン画面に弾かれています: {TARGET_URL}")
 
     except Exception as e:
         print(f"取得失敗: {e}")
