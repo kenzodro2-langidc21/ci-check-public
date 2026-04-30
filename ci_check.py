@@ -122,11 +122,12 @@ def main():
                 target_soup = BeautifulSoup(target_res.content, 'html.parser')
                 page_text = target_soup.get_text()
 
-                if "在庫なし" not in page_text:
+          # ページ内に「在庫なし」と「販売終了」が両方ともなければ、在庫ありとみなす
+                if "在庫なし" not in page_text and "販売終了" not in page_text:
                     print(f"〇 変化あり（在庫復活の可能性！）: {url}")
                     available_items.append(url)
                 else:
-                    print(f"× 在庫なし: {url}")
+                    print(f"× 在庫なし（または販売終了）: {url}")
                 
                 success = True
                 break
