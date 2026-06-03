@@ -37,9 +37,6 @@ TARGET_URLS = [
     "https://www.ci-medical.com/dental/catalog_item/80106052",
     "https://www.ci-medical.com/dental/catalog_item/80106051",
     "https://www.ci-medical.com/dental/catalog_item/80106050",
-    "https://www.ci-medical.com/dental/catalog_item/801115025",
-    "https://www.ci-medical.com/dental/catalog_item/801115026",
-    "https://www.ci-medical.com/dental/catalog_item/801115027",
 ]
 
 login_url = "https://www.ci-medical.com/accounts/sign_in"
