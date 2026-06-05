@@ -28,12 +28,7 @@ TARGET_URLS = [
     "https://www.ci-medical.com/dental/catalog_item/801Y10156",
     "https://www.ci-medical.com/dental/catalog_item/801Y173",
     "https://www.ci-medical.com/dental/catalog_item/801Y458",
-    "https://www.ci-medical.com/dental/catalog_item/801128608",
-    "https://www.ci-medical.com/dental/catalog_item/801128607",
     "https://www.ci-medical.com/dental/catalog_item/801109528",
-    "https://www.ci-medical.com/dental/catalog_item/80106052",
-    "https://www.ci-medical.com/dental/catalog_item/80106051",
-    "https://www.ci-medical.com/dental/catalog_item/80106050",
 ]
 
 login_url = "https://www.ci-medical.com/accounts/sign_in"
